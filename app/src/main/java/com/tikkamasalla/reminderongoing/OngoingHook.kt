@@ -79,6 +79,10 @@ class OngoingHook : IXposedHookLoadPackage {
                         try {
                             val notification = param.args[2] as? Notification ?: return
                             notification.flags = notification.flags or FLAG_ONGOING
+                            // A tap must not open the app: opening it marks
+                            // every reminder read and clears them.
+                            notification.contentIntent = null
+                            notification.fullScreenIntent = null
                             XposedBridge.log("$TAG: flagged ongoing at source")
                         } catch (t: Throwable) {
                             XposedBridge.log("$TAG client error: ${t.message}")
