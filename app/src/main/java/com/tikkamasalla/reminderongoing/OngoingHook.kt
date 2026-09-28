@@ -43,6 +43,12 @@ class OngoingHook : IXposedHookLoadPackage {
                             if (pkg != TARGET_PKG) return
                             val notification = param.args[6] as? Notification ?: return
                             notification.flags = notification.flags or FLAG_ONGOING
+                            if (isSummary(notification)) {
+                                // Summary tap must only expand, never open
+                                // the app (opening it marks all read).
+                                notification.contentIntent = null
+                                notification.fullScreenIntent = null
+                            }
                             XposedBridge.log(
                                 "$TAG: forced ongoing for $pkg id=${param.args[5]}",
                             )
@@ -55,6 +61,27 @@ class OngoingHook : IXposedHookLoadPackage {
             XposedBridge.log("$TAG: hook installed")
         } catch (t: Throwable) {
             XposedBridge.log("$TAG hook failed: ${t.message}")
+        }
+    }
+
+    /**
+     * Selectivity helper, currently unused: every reminder notification
+     * (summary, child, singleton) is ongoing so nothing can be swiped
+     * away; taps are preserved everywhere (no intent stripping) so
+     * entries stay editable. Kept for a possible per-level policy later.
+     */
+    @Suppress("unused")
+    private fun wantOngoing(notification: Notification): Boolean {
+        return true
+    }
+
+    /** True for collapsed group summaries (reflective: the compile-time
+     * Xposed stubs predate isGroupSummary(), on-device API 20+ has it). */
+    private fun isSummary(notification: Notification): Boolean {
+        return try {
+            XposedHelpers.callMethod(notification, "isGroupSummary") as? Boolean == true
+        } catch (t: Throwable) {
+            false
         }
     }
 
@@ -79,10 +106,10 @@ class OngoingHook : IXposedHookLoadPackage {
                         try {
                             val notification = param.args[2] as? Notification ?: return
                             notification.flags = notification.flags or FLAG_ONGOING
-                            // A tap must not open the app: opening it marks
-                            // every reminder read and clears them.
-                            notification.contentIntent = null
-                            notification.fullScreenIntent = null
+                            if (isSummary(notification)) {
+                                notification.contentIntent = null
+                                notification.fullScreenIntent = null
+                            }
                             XposedBridge.log("$TAG: flagged ongoing at source")
                         } catch (t: Throwable) {
                             XposedBridge.log("$TAG client error: ${t.message}")
